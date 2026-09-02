@@ -15,11 +15,7 @@ share a .fit → decode → dive site from the FIT's GPS
 
 Importing a dive (share a `.fit` → pick the site → logged):
 
-<video src="https://github.com/jjeff07/garmin2ssi/raw/main/docs/import.webm" controls muted playsinline width="320"></video>
-
-Changing settings (`?setup=1`):
-
-<video src="https://github.com/jjeff07/garmin2ssi/raw/main/docs/settings.webm" controls muted playsinline width="320"></video>
+[import.webm](https://github.com/user-attachments/assets/55c1d29b-05e6-4f4a-ba3d-84f2b1f1910b)
 
 ## Install on iPhone
 
@@ -32,7 +28,11 @@ Changing settings (`?setup=1`):
    *Note: Scriptable can reset this whenever the script file changes (an iCloud
    sync, a re-paste) — if sharing a `.fit` stops opening the script, re-check
    these two settings.*
-3. Run it once — it prompts for your MySSI **email / password / member id
+
+   [settings.webm](https://github.com/user-attachments/assets/ecfc3711-5302-4e9e-8fc4-8cf8bd813323)
+
+   
+4. Run it once — it prompts for your MySSI **email / password / member id
    (`SSI_USER_ID`)**, a **fallback dive-site id**, and a **dive-# offset**.
    Stored in the iOS keychain on that device only. (`1018800` North Olmsted Rec
    Center · `1965` White Star Quarry.)
