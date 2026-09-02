@@ -20,29 +20,97 @@ share a .fit → decode → dive site from the FIT's GPS
 2. In `garmin-to-ssi`, turn on **Share Sheet** (script settings) and let it
    accept files.
 3. Run it once — it prompts for your MySSI **email / password / member id
-   (`SSI_USER_ID`)** and a **fallback dive-site id**. Stored in the iOS keychain
-   on that device only. (`1018800` North Olmsted Rec Center · `1965` White Star
-   Quarry.)
+   (`SSI_USER_ID`)**, a **fallback dive-site id**, and a **dive-# offset**.
+   Stored in the iOS keychain on that device only. (`1018800` North Olmsted Rec
+   Center · `1965` White Star Quarry.)
+
+   The FIT carries Garmin's internal `dive_number`, which Garmin Connect shows
+   **+1**. Set the offset to `1` so the logged dive number matches Connect
+   (keychain key `ssi_dive_nr_offset`). Leave it `0` to log the raw FIT value.
+
+   **To change any of these later** (new password, member id, offset, fallback
+   site): run with `?setup=1` — `scriptable:///run?scriptName=garmin-to-ssi&setup=1`
+   — or set `SETUP = true` at the top of the script. The prompt reopens
+   pre-filled; blank email/password/member-id fields keep their current value.
 
 ## Use
 
 - **Garmin Connect app** → the dive → ⋯ → **Export Original** (`.fit`) → Share →
   **garmin-to-ssi**. A notification / Quick Look shows the result.
 - Or call it from a Shortcut: *Run Script* action, pass the `.fit` as input.
+  **Turn "Run Script in App" ON** in that action if you want the dive-site picker
+  — a headless run can't show it and falls back to the nearest site.
 - Dry run: set `DRY_RUN = true` at the top of `garmin-to-ssi.js`, or invoke via
   `scriptable:///run?scriptName=garmin-to-ssi&dry=1` — decodes + resolves the
   site, doesn't push.
 
+## If it seems stuck / debugging
+
+Every step is logged three ways:
+
+- the **`-- log --` block** at the bottom of the result / shortcut output,
+- the **Scriptable console** (run it in-app and watch),
+- **`garmin-to-ssi.log`** in the Scriptable folder — written after *every* step,
+  so even a hard freeze leaves a trail. Add `scriptable/view-log.js` as a
+  script named `view-log` and run it to dump + copy the last run's log.
+
+Network calls time out at 30 s, `Location.current()` at 15 s, the picker at
+120 s, and a **150 s watchdog** force-emits whatever it has. So it should never
+hang indefinitely — the last log line tells you which step is slow.
+
 ## Dive site
 
 1. The FIT's own surface GPS (`session`/`lap` `start_position`/`end_position`) —
-   always wins when present. Pool dives won't have one.
+   wins when present. Pool / dry-test dives won't have a real one (the watch may
+   still stamp a **stale fix from a past trip** — see below).
 2. Otherwise the **phone's current location** (`Location.current()`).
 3. Those coords → `POST www.divessi.com/api/locationServices.php` (the public
    locator; it self-fetches a `PHPSESSID` + `SSI_APIKEY` from the locator page) →
-   nearest site within 5 km, real id.
-4. Nothing found → your fallback `SSI_DIVE_SITE_ID`. Still nothing → the dive is
-   **not** pushed (MySSI silently drops a site-less POST).
+   the dive sites it returns, nearest first. The list = sites within
+   `MAX_SITE_KM` (default 10) if any, **otherwise every site it returned** (so a
+   hand-set location still gets a picker instead of silently falling back).
+   - **0 sites returned** → your fallback `SSI_DIVE_SITE_ID`.
+   - **1 site, and it's within `MAX_SITE_KM`** → used automatically.
+   - **otherwise** → a menu pops up (`name · distance`) so you pick the right
+     one, plus a "fallback id" row. Your choice is remembered per spot (keyed to
+     the coords, ~100 m), so it won't ask twice — force a re-pick with
+     `REPICK = true` or `?repick=1`. With no UI (background automation) it takes
+     the nearest.
+4. No id at all → the dive is **not** pushed (MySSI silently drops a site-less
+   POST).
+
+**FIT GPS overrides.** The FIT's location is used as-is (including a spot you set
+by hand in Garmin Connect). Two opt-in overrides:
+
+- `FORCE_PHONE_LOCATION = true` / `?loc=phone` — always ignore the FIT's GPS and
+  use the phone's (handy when re-testing with an old file).
+- `STALE_FIT_KM = <km>` (default `0` = off) — if the FIT fix is farther than this
+  from the phone, ask which to use. Leave it `0` if you curate dive locations in
+  Connect.
+
+## Result report
+
+When it finishes you get a Quick Look (in-app) or a notification with:
+
+```
+OK — dive logged to MySSI
+
+dive #  7
+when    2026-06-06 17:11 (local)
+runtime 23 min
+depth   3.8 m max  ·  2.9 m avg
+temp    27 °C
+water   fresh
+gas     21% O2
+
+site    White Star Quarry  [1965  ·  2.03 km]
+coords  fit  ·  2 site(s) within 5 km
+match   locator (picked)
+
+result  created (logbook 6 -> 7)
+```
+
+The first line is the status: `OK`, `FAILED — <why>`, `DRY RUN`, or `ERROR — <what>`.
 
 ## Files
 
@@ -51,6 +119,7 @@ share a .fit → decode → dive site from the FIT's GPS
 | `scriptable/fit.js` | FIT decoder + dive extractor + geo helpers (no Scriptable APIs) |
 | `scriptable/ssi.js` | MySSI 82-field form builder (no Scriptable APIs) |
 | `scriptable/garmin-to-ssi.js` | the entry point — keychain, `Request`, `Location`, `args` |
+| `scriptable/view-log.js` | optional — dumps `garmin-to-ssi.log` from the last run |
 | `reference/ssi_logbook_api.md` | reverse-engineered logbook + locator API |
 | `test/` | `node --test` against real `.fit` fixtures — run with `npm test` |
 

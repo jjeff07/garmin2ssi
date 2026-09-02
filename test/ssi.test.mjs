@@ -56,6 +56,15 @@ test("optional fields blank when absent; dive_nr blank when null", () => {
   assert.equal(b.odin_user_log_depth_m, "18.0");
 });
 
+test("dive_nr offset lines the number up with Garmin Connect", () => {
+  assert.equal(diveToForm(dive, { ...cfg, diveNrOffset: 1 }, "1965").odin_user_log_dive_nr, "6");
+  assert.equal(diveToForm(dive, { ...cfg, diveNrOffset: 0 }, "1965").odin_user_log_dive_nr, "5");
+  assert.equal(diveToForm(dive, { ...cfg, diveNrOffset: "1" }, "1965").odin_user_log_dive_nr, "6");
+  // still blank when the FIT has no dive number, offset or not
+  const noNr = { startLocal: new Date(Date.UTC(2026, 0, 2, 8, 5, 0)), divetimeS: 1800, maxDepthM: 18 };
+  assert.equal(diveToForm(noNr, { ...cfg, diveNrOffset: 1 }, "1965").odin_user_log_dive_nr, "");
+});
+
 test("formEncode", () => {
   assert.equal(formEncode({ a: "1 2", b: "x&y" }), "a=1%202&b=x%26y");
 });

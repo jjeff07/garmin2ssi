@@ -58,7 +58,7 @@ const mToFt = (m) => Math.round(m * 3.28084 * 10) / 10;
 /**
  * @param dive  from fit.extractDive: {startLocal:Date, divetimeS, maxDepthM,
  *              avgDepthM, waterTempC, waterType, diveNumber}
- * @param cfg   {userId, divetypeId?, comment?}
+ * @param cfg   {userId, divetypeId?, comment?, diveNrOffset?}
  * @param siteId  SSI dive-site id (required for the dive to actually save)
  */
 function diveToForm(dive, cfg, siteId) {
@@ -69,7 +69,10 @@ function diveToForm(dive, cfg, siteId) {
   b.date_sel2_mm = pad(d.getUTCMonth() + 1);
   b.date_sel2_yy = String(d.getUTCFullYear());
   b.odin_user_log_entry_time = pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes());
-  b.odin_user_log_dive_nr = dive.diveNumber == null ? "" : String(dive.diveNumber);
+  // FIT dive_number is Garmin's internal count; Connect shows it +1. An offset
+  // (SSI_DIVE_NR_OFFSET) lets the logged number match Garmin Connect.
+  b.odin_user_log_dive_nr =
+    dive.diveNumber == null ? "" : String(dive.diveNumber + (Number(cfg.diveNrOffset) || 0));
   b.odin_user_log_var_divetype_id = cfg.divetypeId || DIVETYPE_FUN_DIVE;
   b.odin_user_log_divetime = String(Math.round(dive.divetimeS / 60));
   b.odin_user_log_depth_m = dive.maxDepthM.toFixed(1);

@@ -65,3 +65,17 @@ test("haversine + pickNearestSite", () => {
   assert.equal(fit.pickNearestSite(els, 41.3871, -83.3027, 5).id, "1965");
   assert.equal(fit.pickNearestSite(els, 41.3871, -83.3027, 1), null);
 });
+
+test("sitesNearby: sorted nearest-first, filtered by maxKm", () => {
+  const els = [
+    { data: { properties: { id: "9", name: "Far", lat: "42", lng: "-84", distanceToCenter: "80" } } },
+    { data: { properties: { id: "1965", name: "White Star Quarry", lat: "41.3716", lng: "-83.3155" } } },
+    { data: { properties: { id: "7", name: "Portage Quarry", lat: "41.3800", lng: "-83.3100" } } },
+  ];
+  const near = fit.sitesNearby(els, 41.3871, -83.3027, 5);
+  assert.deepEqual(near.map((s) => s.id), ["7", "1965"]);
+  assert.ok(near[0].distKm < near[1].distKm);
+  assert.equal(near[0].name, "Portage Quarry");
+  assert.equal(fit.sitesNearby(els, 41.3871, -83.3027, null).length, 3); // no filter keeps all
+  assert.deepEqual(fit.sitesNearby([], 0, 0), []);
+});

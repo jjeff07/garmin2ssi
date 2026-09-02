@@ -160,7 +160,10 @@ function semiPair(msg, latNum, lngNum) {
   if (la == null || lo == null) return null;
   let lng = lo * SEMI_TO_DEG;
   if (lng > 180) lng -= 360;
-  return { lat: la * SEMI_TO_DEG, lng };
+  const lat = la * SEMI_TO_DEG;
+  if (Math.abs(lat) < 0.02 && Math.abs(lng) < 0.02) return null; // (0,0) "null island" sentinel
+  if (Math.abs(lat) > 90) return null;
+  return { lat, lng };
 }
 
 /** messages -> normalised dive object */
@@ -170,10 +173,13 @@ function extractDive(m) {
   const activity = m.activity && m.activity[0];
   const settings = m.dive_settings && m.dive_settings[0];
   const gas = m.dive_gas && m.dive_gas[0];
-  // prefer the dive_summary that carries a dive_number
+  // the dive-level summary references the session (reference_mesg == 18);
+  // per-interval summaries reference a lap (19) and carry partial numbers
+  const summaries = m.dive_summary || [];
   let summ = null;
-  for (const s of m.dive_summary || []) if (s[10] != null) summ = s;
-  if (!summ) summ = (m.dive_summary || [])[0] || null;
+  for (const s of summaries) if (s[0] === 18) { summ = s; break; }
+  if (!summ) for (const s of summaries) if (s[10] != null) { summ = s; break; }
+  if (!summ) summ = summaries[0] || null;
 
   const startRaw = firstNum(session && session[2], lap && lap[2]);
   if (startRaw == null) throw new Error("FIT: no session/lap start_time");
@@ -197,12 +203,15 @@ function extractDive(m) {
   const wt = settings && settings[4];
   const waterType = wt === 0 ? "fresh" : wt === 1 ? "salt" : null;
 
-  const fix =
-    semiPair(session, 3, 4) ||
-    semiPair(lap, 3, 4) ||
-    semiPair(lap, 5, 6) ||
-    semiPair(session, 29, 30) ||
-    semiPair(session, 31, 32);
+  const fixCandidates = [
+    ["session.start_position", semiPair(session, 3, 4)],
+    ["lap.start_position", semiPair(lap, 3, 4)],
+    ["lap.end_position", semiPair(lap, 5, 6)],
+    ["session.nec_corner", semiPair(session, 29, 30)],
+    ["session.swc_corner", semiPair(session, 31, 32)],
+  ];
+  let fix = null, fixSrc = "none";
+  for (const [nm, v] of fixCandidates) if (v) { fix = v; fixSrc = nm; break; }
 
   return {
     startLocal,                                   // Date; use getUTC* for wall clock
@@ -215,6 +224,8 @@ function extractDive(m) {
     o2Pct: gas && gas[1] != null ? gas[1] : null,
     lat: fix ? fix.lat : null,
     lng: fix ? fix.lng : null,
+    fixSrc,                                        // which FIT field the coords came from
+    summaryCount: summaries.length,
   };
 }
 
@@ -229,8 +240,8 @@ function haversineKm(aLat, aLng, bLat, bLng) {
   return 2 * R * Math.asin(Math.sqrt(s));
 }
 
-/** locator elements -> nearest {id,name,distKm} within maxKm, or null */
-function pickNearestSite(elements, lat, lng, maxKm = 5) {
+/** locator elements -> [{id,name,lat,lng,distKm}] within maxKm, nearest first */
+function sitesNearby(elements, lat, lng, maxKm = 5) {
   const sites = [];
   for (const el of elements || []) {
     const p = el && el.data && el.data.properties;
@@ -239,12 +250,19 @@ function pickNearestSite(elements, lat, lng, maxKm = 5) {
     const dist = Number.isFinite(sLat)
       ? haversineKm(lat, lng, sLat, sLng)
       : parseFloat(p.distanceToCenter);
-    sites.push({ id: String(p.id), name: p.name || "", distKm: Number.isFinite(dist) ? dist : null });
+    sites.push({
+      id: String(p.id), name: p.name || "",
+      lat: Number.isFinite(sLat) ? sLat : null, lng: Number.isFinite(sLng) ? sLng : null,
+      distKm: Number.isFinite(dist) ? dist : null,
+    });
   }
-  sites.sort((a, b) => (a.distKm ?? 1e9) - (b.distKm ?? 1e9));
-  const top = sites[0];
-  if (top && (top.distKm == null || top.distKm <= maxKm)) return top;
-  return null;
+  sites.sort((a, b) => (a.distKm == null ? 1e9 : a.distKm) - (b.distKm == null ? 1e9 : b.distKm));
+  return maxKm == null ? sites : sites.filter((s) => s.distKm == null || s.distKm <= maxKm);
+}
+
+/** nearest within maxKm, or null */
+function pickNearestSite(elements, lat, lng, maxKm = 5) {
+  return sitesNearby(elements, lat, lng, maxKm)[0] || null;
 }
 
 // ---- base64 -> bytes (Scriptable Data has no byte accessor) --------------
@@ -274,7 +292,7 @@ function assertRawFit(bytes) {
 }
 
 const api = {
-  FIT_EPOCH, decodeFit, extractDive, haversineKm, pickNearestSite,
+  FIT_EPOCH, decodeFit, extractDive, haversineKm, sitesNearby, pickNearestSite,
   base64ToBytes, assertRawFit,
 };
 if (typeof module !== "undefined" && module.exports) module.exports = api;
