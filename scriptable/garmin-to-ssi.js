@@ -16,7 +16,7 @@
  */
 
 const DRY_RUN = false; // flip to true to decode + resolve site but not push
-const REPICK = false;  // flip to true (or add ?repick=1) to re-choose a remembered site
+const REMEMBER_PICKS = false; // true: after you pick a site at some coords, reuse it silently next time
 const SETUP = false;   // flip to true (or add ?setup=1) to re-open the email/password/settings prompt
 const FORCE_PHONE_LOCATION = false; // (or ?loc=phone) ignore the FIT's GPS, use the phone's
 const STALE_FIT_KM = 0; // >0: if the FIT's GPS is farther than this (km) from the phone, ask which to use
@@ -226,47 +226,51 @@ async function chooseSite(candidates, cfg, lat, lng) {
   }
 
   const key = "ssi_site_pick_" + lat.toFixed(3) + "_" + lng.toFixed(3);
-  const repick = REPICK || (args.queryParameters && args.queryParameters.repick === "1");
-  if (!repick && Keychain.contains(key)) {
-    const hit = candidates.find((c) => c.id === Keychain.get(key));
-    if (hit) {
-      log("remembered pick for this spot: " + hit.name + " [" + hit.id + "]");
-      return Object.assign({ src: "locator (remembered)" }, hit);
-    }
+  const rememberedId = Keychain.contains(key) ? Keychain.get(key) : "";
+  const remembered = candidates.find((c) => c.id === rememberedId) || null;
+
+  if (REMEMBER_PICKS && remembered) {
+    log("remembered pick for this spot: " + remembered.name + " [" + remembered.id + "]");
+    return Object.assign({ src: "locator (remembered)" }, remembered);
   }
 
-  const shown = candidates.slice(0, 10);
+  // put the last-used site first (marked), keep the rest by distance
+  let ordered = candidates.slice(0, 10);
+  if (remembered) ordered = [remembered].concat(ordered.filter((c) => c.id !== remembered.id)).slice(0, 10);
+
   if (!canPrompt()) {
-    log(shown.length + " candidates but running headless (no picker) -> nearest");
-    return Object.assign({ src: "locator (nearest - headless)" }, shown[0]);
+    const pick = remembered || ordered[0];
+    log(ordered.length + " candidates, running headless (no picker) -> " + pick.name);
+    return Object.assign({ src: "locator (" + (remembered ? "remembered" : "nearest") + " - headless)" }, pick);
   }
 
-  log("prompting to pick between " + shown.length + " sites");
+  log("prompting to pick between " + ordered.length + " sites");
   let idx;
   try {
     const a = new Alert();
     a.title = "Which dive site?";
-    a.message =
-      "Nearest sites to " + lat.toFixed(4) + ", " + lng.toFixed(4) +
-      ". Your choice is remembered for this spot.";
-    shown.forEach((c) =>
-      a.addAction(c.name + (c.distKm != null ? "  ·  " + c.distKm.toFixed(1) + " km" : ""))
+    a.message = "Nearest sites to " + lat.toFixed(4) + ", " + lng.toFixed(4) + ".";
+    ordered.forEach((c) =>
+      a.addAction(
+        (remembered && c.id === remembered.id ? "★ " : "") +
+        c.name + (c.distKm != null ? "  ·  " + c.distKm.toFixed(1) + " km" : "")
+      )
     );
     if (cfg.diveSiteId) a.addAction("Fallback id " + cfg.diveSiteId);
     a.addCancelAction("Cancel");
     idx = await withTimeout(a.presentSheet(), PICKER_TIMEOUT_S * 1000, "site picker");
   } catch (e) {
     log("picker unavailable (" + (e && e.message ? e.message : e) + ") -> nearest");
-    return Object.assign({ src: "locator (nearest - no picker)" }, shown[0]);
+    return Object.assign({ src: "locator (nearest - no picker)" }, ordered[0]);
   }
   if (idx === -1) throw new Error("cancelled at dive-site selection");
-  if (idx >= shown.length) {
+  if (idx >= ordered.length) {
     log("picked the fallback id");
     return { id: cfg.diveSiteId, name: "(fallback id)", distKm: null, src: "config" };
   }
-  try { Keychain.set(key, shown[idx].id); } catch (e) { /* ignore */ }
-  log("picked: " + shown[idx].name + " [" + shown[idx].id + "]");
-  return Object.assign({ src: "locator (picked)" }, shown[idx]);
+  try { Keychain.set(key, ordered[idx].id); } catch (e) { /* ignore */ }
+  log("picked: " + ordered[idx].name + " [" + ordered[idx].id + "]");
+  return Object.assign({ src: "locator (picked)" }, ordered[idx]);
 }
 
 // ---------- MySSI login + create ----------
@@ -493,7 +497,7 @@ try {
   );
 } catch (e) { /* no Timer - skip watchdog */ }
 
-function finish(head, body) {
+async function finish(head, body) {
   if (DONE) return;
   DONE = true;
   try { if (WATCHDOG) WATCHDOG.invalidate(); } catch (e) { /* ignore */ }
@@ -502,7 +506,7 @@ function finish(head, body) {
   const msg = (body ? head + "\n\n" + body : head) + "\n\n-- log --\n" + LOG.join("\n");
   console.log(msg);
 
-  // surface the result every way we can - one of these always lands
+  // always: clipboard + file + shortcut output (retrievable even with no UI)
   try { Pasteboard.copy(msg); } catch (e) { /* ignore */ }
   try {
     const fm = FileManager.local();
@@ -511,21 +515,31 @@ function finish(head, body) {
   try {
     if (typeof Script !== "undefined" && Script.setShortcutOutput) Script.setShortcutOutput(msg);
   } catch (e) { /* ignore */ }
+
+  // a notification always fires (works when the app isn't in front)
   try {
     if (typeof Notification !== "undefined") {
       const n = new Notification();
       n.title = "Garmin → SSI";
-      n.body = head;
+      n.body = head + (body ? "\n" + body.split("\n").slice(0, 6).join("\n") : "");
       n.sound = "default";
-      n.schedule();
+      await n.schedule();
     }
   } catch (e) { /* ignore */ }
+
+  // Quick Look only when a UI is available, and it MUST be awaited or the
+  // script exits before it renders. It blocks until you dismiss it.
   try {
-    if (typeof QuickLook !== "undefined") QuickLook.present(msg, false);
+    if (canPrompt() && typeof QuickLook !== "undefined") {
+      await QuickLook.present(msg, false);
+    }
   } catch (e) { /* ignore */ }
+
   try {
     if (typeof Script !== "undefined" && Script.complete) Script.complete();
   } catch (e) { /* ignore */ }
 }
 
-main().catch((e) => finish("ERROR - " + (e && e.message ? e.message : String(e))));
+main().catch(async (e) => {
+  await finish("ERROR - " + (e && e.message ? e.message : String(e)));
+});

@@ -17,8 +17,11 @@ share a .fit → decode → dive site from the FIT's GPS
    `fit`, `ssi`, `garmin-to-ssi` (contents = `scriptable/fit.js`,
    `scriptable/ssi.js`, `scriptable/garmin-to-ssi.js`).
    *(Or drop the three `.js` files into the Scriptable iCloud folder.)*
-2. In `garmin-to-ssi`, turn on **Share Sheet** (script settings) and let it
-   accept files.
+2. In `garmin-to-ssi` → script settings: turn on **Show in Share Sheet**, and
+   under **Share Sheet Inputs** select **File URLs**.
+   *Note: Scriptable can reset this whenever the script file changes (an iCloud
+   sync, a re-paste) — if sharing a `.fit` stops opening the script, re-check
+   these two settings.*
 3. Run it once — it prompts for your MySSI **email / password / member id
    (`SSI_USER_ID`)**, a **fallback dive-site id**, and a **dive-# offset**.
    Stored in the iOS keychain on that device only. (`1018800` North Olmsted Rec
@@ -72,10 +75,10 @@ hang indefinitely — the last log line tells you which step is slow.
    - **0 sites returned** → your fallback `SSI_DIVE_SITE_ID`.
    - **1 site, and it's within `MAX_SITE_KM`** → used automatically.
    - **otherwise** → a menu pops up (`name · distance`) so you pick the right
-     one, plus a "fallback id" row. Your choice is remembered per spot (keyed to
-     the coords, ~100 m), so it won't ask twice — force a re-pick with
-     `REPICK = true` or `?repick=1`. With no UI (background automation) it takes
-     the nearest.
+     one, plus a "fallback id" row. It asks **every time**; your last pick for
+     that spot (~100 m) is listed first, marked ★. Set `REMEMBER_PICKS = true` to
+     reuse that pick silently instead of asking. With no UI (background
+     automation) it takes the ★ pick if there is one, else the nearest.
 4. No id at all → the dive is **not** pushed (MySSI silently drops a site-less
    POST).
 
@@ -90,10 +93,20 @@ by hand in Garmin Connect). Two opt-in overrides:
 
 ## Result report
 
-When it finishes you get a Quick Look (in-app) or a notification with:
+Every run, the full report is:
+
+- **copied to the clipboard**,
+- written to **`garmin-to-ssi.result.txt`** in the Scriptable folder,
+- set as the **script's output** (a Shortcut sees it — add a *Show Result* or
+  *Quick Look* action after *Run Script* to see it there), and
+- posted as a **notification**.
+
+Run **in-app or from the Share Sheet** and a **Quick Look** also opens with the
+report. A headless Shortcut / automation run can't pop UI — use the notification,
+the clipboard, or a *Show Result* action.
 
 ```
-OK — dive logged to MySSI
+OK - dive logged to MySSI
 
 dive #  7
 when    2026-06-06 17:11 (local)
@@ -104,13 +117,13 @@ water   fresh
 gas     21% O2
 
 site    White Star Quarry  [1965  ·  2.03 km]
-coords  fit  ·  2 site(s) within 5 km
+coords  fit  ·  2 within 10 km: White Star Quarry 0.3km, ...
 match   locator (picked)
 
 result  created (logbook 6 -> 7)
 ```
 
-The first line is the status: `OK`, `FAILED — <why>`, `DRY RUN`, or `ERROR — <what>`.
+First line is the status: `OK`, `FAILED - <why>`, `DRY RUN`, or `ERROR - <what>`.
 
 ## Files
 
