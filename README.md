@@ -11,6 +11,16 @@ share a .fit → decode → dive site from the FIT's GPS
              → log in to MySSI → POST the dive → notification
 ```
 
+## Demo
+
+Importing a dive (share a `.fit` → pick the site → logged):
+
+<video src="https://github.com/jjeff07/garmin2ssi/raw/main/docs/import.webm" controls muted playsinline width="320"></video>
+
+Changing settings (`?setup=1`):
+
+<video src="https://github.com/jjeff07/garmin2ssi/raw/main/docs/settings.webm" controls muted playsinline width="320"></video>
+
 ## Install on iPhone
 
 1. Scriptable → **+** (new script) three times, paste in and name them exactly:
