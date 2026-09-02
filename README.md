@@ -1,4 +1,4 @@
-# garmin-ssi (Scriptable)
+# garmin2ssi (Scriptable)
 
 Log a Garmin dive `.fit` straight into your [MySSI](https://my.divessi.com) web
 logbook, from **[Scriptable](https://scriptable.app)** on iOS. No server, no
