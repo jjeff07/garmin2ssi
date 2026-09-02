@@ -1,0 +1,9 @@
+{
+  "name": "garmin-ssi-scriptable",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Log a Garmin dive .fit into the MySSI web logbook, from Scriptable on iOS.",
+  "scripts": {
+    "test": "node --test test/"
+  }
+}
