@@ -15,6 +15,8 @@ share a .fit → decode → dive site from the FIT's GPS
 
 Importing a dive (share a `.fit` → pick the site → logged):
 
+[import-fit.webm](https://github.com/user-attachments/assets/93d326aa-4c01-4fb2-8a7d-f16a4812aa57)
+
 ## Install on iPhone
 
 1. Scriptable → **+** (new script) three times, paste in and name them exactly:
